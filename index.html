@@ -1386,6 +1386,23 @@ function getFijoMonto(idx) {
   return S.fijosExtra[idx - FIJOS_BASE.length].monto;
 }
 
+// Get monto for a specific month (override) or fall back to base
+function getFijoMontoMes(idx, mes, anio) {
+  var key = (anio||S.anio) + '_' + mes + '_monto_' + idx;
+  return S.fijosMontos[key] || getFijoMonto(idx);
+}
+
+function updFijoMontoMes(idx, val, mes, anio) {
+  var v = parseFloat(val);
+  var key = (anio||S.anio) + '_' + mes + '_monto_' + idx;
+  if (isNaN(v) || v < 0) {
+    delete S.fijosMontos[key]; // clear override
+  } else {
+    S.fijosMontos[key] = v;
+  }
+  save();
+}
+
 function delFijoExtra(i) {
   S.fijosExtra.splice(i, 1);
   save(); renderFijos();
@@ -1428,8 +1445,10 @@ function montoMensual(item, idx) {
 }
 
 // montoReal: what you actually pay when it's due (for Fijos tab display)
-function montoReal(item, idx) {
-  return (idx !== undefined) ? getFijoMonto(idx) : item.monto;
+// Uses month-specific override if set, otherwise base amount
+function montoReal(item, idx, mes, anio) {
+  if (idx === undefined) return item.monto;
+  return getFijoMontoMes(idx, mes !== undefined ? mes : S.mesFijos, anio || S.anio);
 }
 
 // How many months does this frec "cover" after paying
@@ -1504,7 +1523,7 @@ function renderFijos() {
   var totalFrancoMes = 0, totalJazminMes = 0, totalMixtoMes = 0;
   todosConIdx.forEach(function(entry) {
     var item=entry.item, idx=entry.idx;
-    var mm = montoReal(item, idx); // actual amount due when it's due
+    var mm = montoReal(item, idx, S.mesFijos, S.anio); // actual amount due when it's due
     var pagado = fijoPagado(idx, S.mesFijos, S.anio);
     var noAplica = fijoNoAplica(idx, S.mesFijos, S.anio);
     totalMes += noAplica ? 0 : mm;
@@ -1536,7 +1555,7 @@ function renderFijos() {
     html += '<div class="stitle">' + cat + '</div>';
     grupos[cat].forEach(function(entry) {
       var item = entry.item, idx = entry.idx;
-      var mm = montoReal(item, idx); // full amount actually paid
+      var mm = montoReal(item, idx, S.mesFijos, S.anio); // amount for this month
       var pagado = fijoPagado(idx, S.mesFijos, S.anio);
       var noAplica = fijoNoAplica(idx, S.mesFijos, S.anio);
       var esExtra = idx >= FIJOS_BASE.length;
@@ -1566,9 +1585,14 @@ function renderFijos() {
       if (noAplica) html += '<span style="color:var(--t3)">cubierto por pago anterior</span>';
       else if (item.frec !== 'mensual') html += 'equivale a ' + H(f$(Math.round(montoMensual(item,idx)))) + '/mes';
       html += '</div></div>';
-      // Monto editable
-      html += '<input style="width:72px;background:var(--bg3);border:1px solid var(--border2);color:var(--text);font-family:IBM Plex Mono,monospace;font-size:12px;padding:5px 6px;border-radius:4px;outline:none;text-align:right" type="number" value="' + getFijoMonto(idx) + '" onchange="updFijoMonto(' + idx + ',this.value)" onchange="updFijoMonto(' + idx + ',this.value)">';
-      html += '<span style="font-size:9px;color:var(--t3);font-family:IBM Plex Mono,monospace;flex-shrink:0">' + H(f$(Math.round(item.monto))) + '</span>';
+      // Single editable monto for this month, with base ref shown below
+      var montoBase = getFijoMonto(idx);
+      var montoMesActual = getFijoMontoMes(idx, S.mesFijos, S.anio);
+      var tieneOverride = S.fijosMontos[(S.anio) + '_' + S.mesFijos + '_monto_' + idx] !== undefined;
+      html += '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex-shrink:0">';
+      html += '<input style="width:72px;background:var(--bg3);border:1px solid ' + (tieneOverride ? 'var(--y)' : 'var(--border2)') + ';color:var(--text);font-family:IBM Plex Mono,monospace;font-size:12px;padding:5px 6px;border-radius:4px;outline:none;text-align:right" type="number" value="' + montoMesActual + '" onchange="updFijoMontoMes(' + idx + ',this.value,' + S.mesFijos + ',' + S.anio + ')">';
+      html += '<span style="font-size:8px;color:var(--t3);font-family:IBM Plex Mono,monospace">ref: ' + f$(montoBase) + '</span>';
+      html += '</div>';
       html += '<button class="g-del" onclick="delFijo(' + idx + ')" title="Eliminar">x</button>';
       html += '</div>';
     });
@@ -1814,6 +1838,7 @@ function renderProy() {
 
 // ── STORAGE ──
 var SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyIZvBgTJ14BZ-8X4X3hountXnKOvZY2b5rcvD5aALgL5MrvC-GfR3rUTRvAHERqyrjKQ/exec";
+var API_KEY = 'b7wFE9MnqsPgr9xxkOK5sF3pNk3jlyMPckYHhRcivz8';
 var SK = 'fin2026';
 var _saveTimer = null;
 var _lastHash = '';
