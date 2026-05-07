@@ -674,7 +674,7 @@ function renderDash() {
     });
   });
   var disp = ing.tot - gas.total;
-  var aho = disp - tM - gProy - gProyInv;
+  var aho = disp - gProy - gProyInv; // tarjetas no restan del ahorro estimado
   var ahoObj = S.ahoObj / 12;
   var ac = aho >= ahoObj ? 'var(--g)' : aho > 0 ? 'var(--y)' : 'var(--r)';
 
@@ -705,7 +705,7 @@ function renderDash() {
     '<div class="cr"><span class="cl">Var. Jazmin</span><span class="cv y hide">-' + fU(gVE) + '</span></div>' +
     (gProy > 0 ? '<div class="cr"><span class="cl">Proyectos (gastos)</span><span class="cv y hide">-' + fU(gProy) + '</span></div>' : '') +
     (gProyInv > 0 ? '<div class="cr"><span class="cl">Proyectos (inversion)</span><span class="cv b hide">-' + fU(gProyInv) + '</span></div>' : '') +
-    '<div class="cr"><span class="cl">Tarjetas</span><span class="cv r hide">-' + fU(tM) + '</span></div>' +
+    '<div class="cr"><span class="cl">Tarjetas (informativo)</span><span class="cv r hide">' + fU(tM) + '</span></div>' +
     '<div class="cr tot"><span class="cl">Ahorro estimado</span><span class="cv hide" style="color:' + ac + '">' + fU(aho) + '</span></div>';
 
   var pa = pct(S.ahoReal, S.ahoObj);
@@ -1000,7 +1000,7 @@ function renderAho() {
     '<div class="metric hi"><div class="lbl">Total ahorrado</div><div class="val p hide">' + fU(real) + '</div><div class="sub">de ' + fU(obj) + ' objetivo</div></div>' +
     '<div class="metric"><div class="lbl">Franco</div><div class="val g hide">' + fU(tots.franco) + '</div><div class="sub">acumulado</div></div>' +
     '<div class="metric"><div class="lbl">Jazmin</div><div class="val b hide">' + fU(tots.jazmin) + '</div><div class="sub">acumulado</div></div>' +
-    '<div class="metric"><div class="lbl">Tarjetas descontadas</div><div class="val r hide">-' + fU(tarj) + '</div><div class="sub">ahorro neto: ' + H(fU(Math.max(0, real-tarj))) + '</div></div>';
+    '<div class="metric"><div class="lbl">Meses registrados</div><div class="val b">' + tots.meses + '</div><div class="sub">con aportes</div></div>';
 
   // Progress
   if (g('aho-prog')) g('aho-prog').innerHTML =
@@ -1359,13 +1359,26 @@ function updFijoResp(idx, val) {
 
 function updFijoMonto(idx, val) {
   var v = parseFloat(val);
-  if (isNaN(v) || v <= 0) return;
+  if (isNaN(v) || v < 0) return;
   if (idx < FIJOS_BASE.length) {
     S.fijosMontos[idx] = v;
+    FIJOS_BASE[idx].monto = v; // keep in sync so dashboard reads it
   } else {
     S.fijosExtra[idx - FIJOS_BASE.length].monto = v;
   }
-  renderFijos();
+  save();
+  // Update totals display without full re-render (avoids keyboard closing)
+  var totalMes = 0;
+  var deleted = S.fijosDeleted || {};
+  var todosConIdx = FIJOS_BASE.map(function(item,i){ return {item:item,idx:i}; }).filter(function(e){ return !deleted[e.idx]; });
+  S.fijosExtra.forEach(function(item,i){ todosConIdx.push({item:item,idx:FIJOS_BASE.length+i}); });
+  todosConIdx.forEach(function(e){ totalMes += montoReal(e.item, e.idx); });
+  var metEl = g('f-met');
+  if (metEl) {
+    var tc = S.tc || 45;
+    metEl.querySelector('.val.p').textContent = '$' + Math.round(totalMes).toLocaleString('es');
+    metEl.querySelector('.sub').textContent = fU(totalMes / tc);
+  }
 }
 
 function getFijoMonto(idx) {
@@ -1554,7 +1567,7 @@ function renderFijos() {
       else if (item.frec !== 'mensual') html += 'equivale a ' + H(f$(Math.round(montoMensual(item,idx)))) + '/mes';
       html += '</div></div>';
       // Monto editable
-      html += '<input style="width:72px;background:var(--bg3);border:1px solid var(--border2);color:var(--text);font-family:IBM Plex Mono,monospace;font-size:12px;padding:5px 6px;border-radius:4px;outline:none;text-align:right" type="number" value="' + getFijoMonto(idx) + '" oninput="updFijoMonto(' + idx + ',this.value)" onchange="updFijoMonto(' + idx + ',this.value)">';
+      html += '<input style="width:72px;background:var(--bg3);border:1px solid var(--border2);color:var(--text);font-family:IBM Plex Mono,monospace;font-size:12px;padding:5px 6px;border-radius:4px;outline:none;text-align:right" type="number" value="' + getFijoMonto(idx) + '" onchange="updFijoMonto(' + idx + ',this.value)" onchange="updFijoMonto(' + idx + ',this.value)">';
       html += '<span style="font-size:9px;color:var(--t3);font-family:IBM Plex Mono,monospace;flex-shrink:0">' + H(f$(Math.round(item.monto))) + '</span>';
       html += '<button class="g-del" onclick="delFijo(' + idx + ')" title="Eliminar">x</button>';
       html += '</div>';
